@@ -40,7 +40,13 @@ PathResult Dijkstra(const std::vector<std::vector<Edge>>& graph, Node start) {
 
     if (current_dist > dist[u]) {
       continue;
-    }
+    } 
+    /*
+    Lazy Deletion 
+    std::priority_queue 不支持直接删或修改，直接压入多个历史记录
+    遇到过时数据时跳过
+    */
+
 
     for (const auto& edge : graph[u]) {
       const Weight new_dist = dist[u] + edge.weight;
