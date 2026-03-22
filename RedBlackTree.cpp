@@ -65,7 +65,65 @@ class RedBlackTree {
       InsertFixup(new_node);
       return std::make_pair(true, new_node->data);
     }
+    // ================= 新增：删除操作入口 =================
+    bool Remove(const T& key) {
+      Node* z = root_;
+      // 1. 查找要删除的节点
+      while (z != nullptr) {
+        if (key < z->data) {
+          z = z->left;
+        } else if (key > z->data) {
+          z = z->right;
+        } else {
+          break; // 找到了
+        }
+      }
+      
+      if (z == nullptr) return false; // 没找到该节点
 
+      Node* y = z;
+      Color y_original_color = y->color;
+      Node* x = nullptr;
+      Node* x_parent = nullptr; // 关键：当 x 是 nullptr 时，用于记录其父节点
+
+      // 2. 标准的二叉搜索树删除逻辑
+      if (z->left == nullptr) {
+        x = z->right;
+        x_parent = z->parent;
+        Transplant(z, z->right);
+      } else if (z->right == nullptr) {
+        x = z->left;
+        x_parent = z->parent;
+        Transplant(z, z->left);
+      } else {
+        // 找右子树中的最小节点作为后继
+        y = Minimum(z->right);
+        y_original_color = y->color;
+        x = y->right;
+        
+        if (y->parent == z) {
+          x_parent = y; 
+        } else {
+          x_parent = y->parent;
+          Transplant(y, y->right);
+          y->right = z->right;
+          y->right->parent = y;
+        }
+        
+        Transplant(z, y);
+        y->left = z->left;
+        y->left->parent = y;
+        y->color = z->color;
+      }
+
+      delete z; // 释放原节点内存
+
+      // 3. 如果删掉（或移走）的节点是黑色，红黑树性质被破坏，需要修复
+      if (y_original_color == Color::kBlack) {
+        DeleteFixup(x, x_parent);
+      }
+      return true;
+    }
     void PrintOrder() const {
       InorderHelper(root_);
       std::cout << std::endl;
@@ -179,6 +237,100 @@ class RedBlackTree {
       root_->color = Color::kBlack;
       // 满足根结点必黑
     }
+    // ================= 新增：子树移植操作 (用于删除) =================
+    void Transplant(Node* u, Node* v) {
+      if (u->parent == nullptr) {
+        root_ = v;
+      } else if (u == u->parent->left) {
+        u->parent->left = v;
+      } else {
+        u->parent->right = v;
+      }
+      if (v != nullptr) {
+        v->parent = u->parent;
+      }
+    }
+    // ================= 新增：查找最小节点 (用于找后继) =================
+    Node* Minimum(Node* node) {
+      while (node->left != nullptr) {
+        node = node->left;
+      }
+      return node;
+    }
+
+    // ================= 新增：删除修复逻辑 (解决双黑问题) =================
+    void DeleteFixup(Node* x, Node* x_parent) {
+      while (x != root_ && (x == nullptr || x->color == Color::kBlack)) {
+        if (x == x_parent->left) {
+          Node* w = x_parent->right; // w 是 x 的兄弟节点
+          if (w == nullptr) break;
+
+          // 情况 1：兄弟节点是红色的
+          if (w->color == Color::kRed) {
+            w->color = Color::kBlack;
+            x_parent->color = Color::kRed;
+            LeftRotate(x_parent);
+            w = x_parent->right;
+          }
+
+          // 情况 2：兄弟节点是黑色的，且兄弟的两个子节点都是黑色的 (nullptr 视为黑色)
+          if ((w->left == nullptr || w->left->color == Color::kBlack) &&
+              (w->right == nullptr || w->right->color == Color::kBlack)) {
+            w->color = Color::kRed;
+            x = x_parent;
+            x_parent = x->parent; // 向上回溯
+          } else {
+            // 情况 3：兄弟节点是黑色的，兄弟的左孩子是红色的，右孩子是黑色的
+            if (w->right == nullptr || w->right->color == Color::kBlack) {
+              if (w->left != nullptr) w->left->color = Color::kBlack;
+              w->color = Color::kRed;
+              RightRotate(w);
+              w = x_parent->right;
+            }
+            // 情况 4：兄弟节点是黑色的，兄弟的右孩子是红色的
+            w->color = x_parent->color;
+            x_parent->color = Color::kBlack;
+            if (w->right != nullptr) w->right->color = Color::kBlack;
+            LeftRotate(x_parent);
+            x = root_; // 结束循环
+          }
+        } else {
+          // 对称情况：x 是父节点的右孩子
+          Node* w = x_parent->left;
+          if (w == nullptr) break;
+
+          if (w->color == Color::kRed) {
+            w->color = Color::kBlack;
+            x_parent->color = Color::kRed;
+            RightRotate(x_parent);
+            w = x_parent->left;
+          }
+
+          if ((w->right == nullptr || w->right->color == Color::kBlack) &&
+              (w->left == nullptr || w->left->color == Color::kBlack)) {
+            w->color = Color::kRed;
+            x = x_parent;
+            x_parent = x->parent;
+          } else {
+            if (w->left == nullptr || w->left->color == Color::kBlack) {
+              if (w->right != nullptr) w->right->color = Color::kBlack;
+              w->color = Color::kRed;
+              LeftRotate(w);
+              w = x_parent->left;
+            }
+            w->color = x_parent->color;
+            x_parent->color = Color::kBlack;
+            if (w->left != nullptr) w->left->color = Color::kBlack;
+            RightRotate(x_parent);
+            x = root_;
+          }
+        }
+      }
+      // 将最终上移的节点染成黑色
+      if (x != nullptr) {
+        x->color = Color::kBlack;
+      }
+    }
     //中序遍历
     void InorderHelper(Node* node) const {
       if (node != nullptr) {
@@ -192,27 +344,24 @@ int main(){
   RedBlackTree<int> rbt;
   
   std::cout << "--- 正在插入数据 ---" << std::endl;
-  // 这组数据会触发红黑树的各种变色和旋转机制
   int elements[] = {10, 20, 30, 15, 25, 5, 1};
-  
   for (int el : elements) {
-    auto result = rbt.Insert(el);
-    if (result.first) {
-      std::cout << "成功插入: " << el << std::endl;
+    rbt.Insert(el);
+  }
+
+  std::cout << "\n插入完毕，当前红黑树中序遍历：" << std::endl;
+  rbt.PrintOrder();
+
+  std::cout << "\n--- 测试删除数据 ---" << std::endl;
+  int to_delete[] = {15, 10, 30}; // 测试删除不同位置的节点
+  for (int el : to_delete) {
+    if (rbt.Remove(el)) {
+      std::cout << "成功删除: " << el << " -> 树状: ";
+      rbt.PrintOrder();
     } else {
-      std::cout << "插入失败，元素已存在: " << el << std::endl;
+      std::cout << "未找到要删除的元素: " << el << std::endl;
     }
   }
-
-  std::cout << "\n--- 测试插入重复数据 ---" << std::endl;
-  auto dup_result = rbt.Insert(15);
-  if (!dup_result.first) {
-    std::cout << "拦截重复数据成功: " << dup_result.second << std::endl;
-  }
-
-  std::cout << "\n--- 红黑树中序遍历结果 ---" << std::endl;
-  // 中序遍历如果打印出来是从小到大严格递增的，说明二叉搜索树的性质得到了维护
-  rbt.PrintOrder();
 
   std::cout << "\n程序运行结束，准备调用析构函数释放内存..." << std::endl;
   return 0;
